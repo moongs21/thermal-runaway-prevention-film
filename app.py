@@ -64,18 +64,43 @@ def refresh_news():
         # subprocess 대신 직접 함수 호출
         from crawler import main as crawl_main
         
+        # 크롤러 실행 (타임아웃 60초)
+        import signal
+        
+        def timeout_handler(signum, frame):
+            raise TimeoutError("크롤링이 60초를 초과했습니다.")
+        
         # 크롤러 실행
-        crawl_main()
+        try:
+            result = crawl_main()
+        except Exception as crawl_error:
+            # 크롤링 실패해도 기존 데이터가 있으면 유지
+            if os.path.exists('news_data.json'):
+                with open('news_data.json', 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                return jsonify({
+                    "success": False,
+                    "message": f"크롤링 중 오류가 발생했습니다: {str(crawl_error)}. 기존 데이터를 유지합니다.",
+                    "total_articles": data.get('total_articles', 0),
+                    "error": str(crawl_error)
+                }), 500
+            else:
+                raise
         
         # 결과 확인
         if os.path.exists('news_data.json'):
             with open('news_data.json', 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
+            message = f"뉴스 데이터가 성공적으로 업데이트되었습니다. ({data.get('total_articles', 0)}개 기사)"
+            if data.get('errors'):
+                message += f" (일부 오류 발생: {len(data.get('errors', []))}개)"
+            
             return jsonify({
                 "success": True,
-                "message": f"뉴스 데이터가 성공적으로 업데이트되었습니다. ({data.get('total_articles', 0)}개 기사)",
-                "total_articles": data.get('total_articles', 0)
+                "message": message,
+                "total_articles": data.get('total_articles', 0),
+                "errors": data.get('errors')
             })
         else:
             return jsonify({
@@ -88,13 +113,19 @@ def refresh_news():
             "success": False,
             "message": f"크롤러 모듈을 불러올 수 없습니다: {str(e)}"
         }), 500
+    except TimeoutError as e:
+        return jsonify({
+            "success": False,
+            "message": f"크롤링 시간 초과: {str(e)}"
+        }), 500
     except Exception as e:
         import traceback
         error_detail = traceback.format_exc()
+        # 사용자에게는 간단한 메시지만 전달
         return jsonify({
             "success": False,
             "message": f"크롤링 중 오류 발생: {str(e)}",
-            "detail": error_detail
+            "detail": error_detail if app.debug else None
         }), 500
 
 

@@ -572,14 +572,29 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    alert('뉴스가 성공적으로 업데이트되었습니다!');
+                    let message = `뉴스가 성공적으로 업데이트되었습니다!\n\n총 ${data.total_articles}개의 기사를 수집했습니다.`;
+                    if (data.errors && data.errors.length > 0) {
+                        message += `\n\n참고: 일부 키워드에서 오류가 발생했습니다 (${data.errors.length}개).`;
+                    }
+                    alert(message);
                     await loadNews();
                 } else {
-                    alert(`오류: ${data.message}`);
+                    let errorMsg = `오류: ${data.message}`;
+                    if (data.total_articles && data.total_articles > 0) {
+                        errorMsg += `\n\n기존 데이터(${data.total_articles}개)는 유지됩니다.`;
+                        await loadNews(); // 기존 데이터라도 표시
+                    }
+                    alert(errorMsg);
+                    console.error('크롤링 오류:', data);
                 }
             } catch (error) {
-                alert('새로고침 중 오류가 발생했습니다.');
-                console.error(error);
+                let errorMsg = '새로고침 중 오류가 발생했습니다.';
+                if (error.message) {
+                    errorMsg += `\n\n상세: ${error.message}`;
+                }
+                errorMsg += '\n\n네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.';
+                alert(errorMsg);
+                console.error('새로고침 오류:', error);
             } finally {
                 btn.disabled = false;
                 btn.textContent = originalText;
