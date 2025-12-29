@@ -14,6 +14,15 @@ from datetime import datetime
 app = Flask(__name__, template_folder='templates', static_folder=None)
 CORS(app)  # CORS 문제 해결
 
+# 앱 시작 시 라우트 확인 (디버깅용)
+# 앱 시작 시 라우트 확인 (디버깅용) - Flask 2.2+ 호환
+with app.app_context():
+    print("=" * 50)
+    print("등록된 라우트:")
+    for rule in app.url_map.iter_rules():
+        print(f"  {rule.endpoint:20s} {list(rule.methods):20s} {rule}")
+    print("=" * 50)
+
 
 @app.route('/')
 def index():
@@ -57,7 +66,7 @@ def get_news():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/refresh')
+@app.route('/api/refresh', methods=['GET', 'POST'])
 def refresh_news():
     """뉴스 데이터 새로고침 (크롤러 직접 호출)"""
     try:
@@ -129,10 +138,16 @@ def refresh_news():
         }), 500
 
 
-# 에러 핸들러 추가
+# 에러 핸들러 추가 - 모든 404를 JSON으로 반환
 @app.errorhandler(404)
 def not_found(error):
-    return jsonify({"error": "Not found", "message": "요청한 리소스를 찾을 수 없습니다."}), 404
+    # 요청 경로 확인
+    from flask import request
+    return jsonify({
+        "error": "Not found", 
+        "message": f"요청한 리소스를 찾을 수 없습니다: {request.path}",
+        "available_routes": ["/", "/api/news", "/api/refresh", "/health"]
+    }), 404
 
 @app.errorhandler(500)
 def internal_error(error):
@@ -142,11 +157,27 @@ def internal_error(error):
 @app.route('/health')
 def health():
     """헬스 체크 엔드포인트"""
+    from flask import request
     return jsonify({
         "status": "ok",
         "templates_exists": os.path.exists('templates'),
-        "index_exists": os.path.exists('templates/index.html') if os.path.exists('templates') else False
+        "index_exists": os.path.exists('templates/index.html') if os.path.exists('templates') else False,
+        "routes": [str(rule) for rule in app.url_map.iter_rules()],
+        "current_path": request.path
     })
+
+# 디버깅용: 모든 라우트 확인
+@app.route('/api/routes')
+def list_routes():
+    """등록된 모든 라우트 확인"""
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            "endpoint": rule.endpoint,
+            "methods": list(rule.methods),
+            "path": str(rule)
+        })
+    return jsonify({"routes": routes})
 
 if __name__ == '__main__':
     # templates 폴더가 없으면 생성

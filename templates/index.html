@@ -568,7 +568,28 @@
             btn.classList.add('opacity-50', 'cursor-not-allowed');
             
             try {
-                const response = await fetch('/api/refresh');
+                const response = await fetch('/api/refresh', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                // 응답 상태 확인
+                if (!response.ok) {
+                    // 404나 다른 오류인 경우
+                    let errorText = await response.text();
+                    try {
+                        // JSON으로 파싱 시도
+                        const errorData = JSON.parse(errorText);
+                        throw new Error(errorData.message || errorData.error || `서버 오류 (${response.status})`);
+                    } catch (parseError) {
+                        // JSON이 아닌 경우 (HTML 등)
+                        throw new Error(`서버 응답 오류 (${response.status}): ${errorText.substring(0, 100)}`);
+                    }
+                }
+                
                 const data = await response.json();
                 
                 if (data.success) {
@@ -579,7 +600,7 @@
                     alert(message);
                     await loadNews();
                 } else {
-                    let errorMsg = `오류: ${data.message}`;
+                    let errorMsg = `오류: ${data.message || '알 수 없는 오류'}`;
                     if (data.total_articles && data.total_articles > 0) {
                         errorMsg += `\n\n기존 데이터(${data.total_articles}개)는 유지됩니다.`;
                         await loadNews(); // 기존 데이터라도 표시
@@ -593,6 +614,7 @@
                     errorMsg += `\n\n상세: ${error.message}`;
                 }
                 errorMsg += '\n\n네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.';
+                errorMsg += '\n\n문제가 계속되면 /health 엔드포인트를 확인해주세요.';
                 alert(errorMsg);
                 console.error('새로고침 오류:', error);
             } finally {
