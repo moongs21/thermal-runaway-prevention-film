@@ -225,5 +225,10 @@ if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=port)
 else:
     # gunicorn으로 실행될 때도 라우트 출력
-    print_routes()
+    # 앱 컨텍스트 내에서만 라우트 출력 가능
+    try:
+        with app.app_context():
+            print_routes()
+    except:
+        print("앱 컨텍스트 없이 라우트를 출력할 수 없습니다. 앱이 로드된 후 확인하세요.")
 
