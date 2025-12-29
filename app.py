@@ -10,14 +10,33 @@ import os
 import sys
 from datetime import datetime
 
-app = Flask(__name__)
+# Flask 앱 초기화 - 템플릿 경로 명시
+app = Flask(__name__, template_folder='templates', static_folder=None)
 CORS(app)  # CORS 문제 해결
 
 
 @app.route('/')
 def index():
     """메인 대시보드 페이지"""
-    return render_template('index.html')
+    try:
+        # 템플릿 파일 경로 확인
+        template_path = os.path.join('templates', 'index.html')
+        if not os.path.exists(template_path):
+            return jsonify({
+                "error": "Template not found",
+                "message": f"템플릿 파일을 찾을 수 없습니다: {template_path}",
+                "current_dir": os.getcwd(),
+                "files": os.listdir('.') if os.path.exists('.') else []
+            }), 500
+        
+        return render_template('index.html')
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "error": "Template rendering error",
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
 
 
 @app.route('/api/news')
@@ -79,12 +98,37 @@ def refresh_news():
         }), 500
 
 
+# 에러 핸들러 추가
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({"error": "Not found", "message": "요청한 리소스를 찾을 수 없습니다."}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({"error": "Internal server error", "message": "서버 내부 오류가 발생했습니다."}), 500
+
+# 루트 경로 테스트
+@app.route('/health')
+def health():
+    """헬스 체크 엔드포인트"""
+    return jsonify({
+        "status": "ok",
+        "templates_exists": os.path.exists('templates'),
+        "index_exists": os.path.exists('templates/index.html') if os.path.exists('templates') else False
+    })
+
 if __name__ == '__main__':
     # templates 폴더가 없으면 생성
     if not os.path.exists('templates'):
         os.makedirs('templates')
     
+    # Render.com에서는 PORT 환경 변수를 사용
+    port = int(os.environ.get('PORT', 5000))
+    
     print("서버를 시작합니다...")
-    print("대시보드: http://localhost:5000")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    print(f"대시보드: http://localhost:{port}")
+    print(f"템플릿 폴더 존재: {os.path.exists('templates')}")
+    print(f"index.html 존재: {os.path.exists('templates/index.html') if os.path.exists('templates') else False}")
+    
+    app.run(debug=False, host='0.0.0.0', port=port)
 
