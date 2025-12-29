@@ -14,14 +14,7 @@ from datetime import datetime
 app = Flask(__name__, template_folder='templates', static_folder=None)
 CORS(app)  # CORS 문제 해결
 
-# 앱 시작 시 라우트 확인 (디버깅용)
-# 앱 시작 시 라우트 확인 (디버깅용) - Flask 2.2+ 호환
-with app.app_context():
-    print("=" * 50)
-    print("등록된 라우트:")
-    for rule in app.url_map.iter_rules():
-        print(f"  {rule.endpoint:20s} {list(rule.methods):20s} {rule}")
-    print("=" * 50)
+# 라우트는 아래에서 정의됨
 
 
 @app.route('/')
@@ -143,10 +136,20 @@ def refresh_news():
 def not_found(error):
     # 요청 경로 확인
     from flask import request
+    # 실제 등록된 라우트 목록 가져오기
+    available_routes = []
+    try:
+        for rule in app.url_map.iter_rules():
+            if rule.endpoint not in ['static']:
+                available_routes.append(str(rule))
+    except:
+        available_routes = ["/", "/api/news", "/api/refresh", "/health", "/api/routes"]
+    
     return jsonify({
         "error": "Not found", 
         "message": f"요청한 리소스를 찾을 수 없습니다: {request.path}",
-        "available_routes": ["/", "/api/news", "/api/refresh", "/health"]
+        "available_routes": available_routes,
+        "method": request.method
     }), 404
 
 @app.errorhandler(500)
@@ -167,30 +170,60 @@ def health():
     })
 
 # 디버깅용: 모든 라우트 확인
-@app.route('/api/routes')
+@app.route('/api/routes', methods=['GET'])
 def list_routes():
     """등록된 모든 라우트 확인"""
-    routes = []
-    for rule in app.url_map.iter_rules():
-        routes.append({
-            "endpoint": rule.endpoint,
-            "methods": list(rule.methods),
-            "path": str(rule)
+    try:
+        routes = []
+        for rule in app.url_map.iter_rules():
+            # static과 error 핸들러 제외
+            if rule.endpoint not in ['static']:
+                routes.append({
+                    "endpoint": rule.endpoint,
+                    "methods": list(rule.methods),
+                    "path": str(rule)
+                })
+        return jsonify({
+            "status": "ok",
+            "total_routes": len(routes),
+            "routes": routes
         })
-    return jsonify({"routes": routes})
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "message": "라우트 정보를 가져오는 중 오류가 발생했습니다."
+        }), 500
+
+# 앱 시작 시 라우트 확인 (모든 라우트 등록 후)
+def print_routes():
+    """등록된 라우트 출력"""
+    print("=" * 60)
+    print("등록된 라우트:")
+    print("-" * 60)
+    for rule in app.url_map.iter_rules():
+        if rule.endpoint not in ['static']:
+            methods = ', '.join(sorted(rule.methods - {'HEAD', 'OPTIONS'}))
+            print(f"  {methods:15s} {str(rule):30s} -> {rule.endpoint}")
+    print("=" * 60)
 
 if __name__ == '__main__':
     # templates 폴더가 없으면 생성
     if not os.path.exists('templates'):
         os.makedirs('templates')
     
+    # 라우트 출력
+    print_routes()
+    
     # Render.com에서는 PORT 환경 변수를 사용
     port = int(os.environ.get('PORT', 5000))
     
-    print("서버를 시작합니다...")
+    print(f"\n서버를 시작합니다...")
     print(f"대시보드: http://localhost:{port}")
     print(f"템플릿 폴더 존재: {os.path.exists('templates')}")
-    print(f"index.html 존재: {os.path.exists('templates/index.html') if os.path.exists('templates') else False}")
+    print(f"index.html 존재: {os.path.exists('templates/index.html') if os.path.exists('templates') else False}\n")
     
     app.run(debug=False, host='0.0.0.0', port=port)
+else:
+    # gunicorn으로 실행될 때도 라우트 출력
+    print_routes()
 
